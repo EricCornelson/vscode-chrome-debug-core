@@ -36,13 +36,9 @@ function install() {
 /**
  * Substitute our version of -core for the tests
  */
-function setCoreVersion(cb) {
-    const packageJsonPath = './vscode-chrome-debug/package.json';
-    const originalPackageJson = fs.readFileSync(packageJsonPath);
-    let modifiedPackageJson = JSON.parse(originalPackageJson);
-    modifiedPackageJson.dependencies['vscode-chrome-debug-core'] = '../';
-    fs.writeFileSync(packageJsonPath, JSON.stringify(modifiedPackageJson));
-    cb();
+async function setCoreVersion(cb) {
+    await run('npm link')();
+    return runInDebug('npm link vscode-chrome-debug-core');
 }
 
 /**
@@ -73,8 +69,8 @@ exports.intTest = intTest;
 exports.testChromeDebug = series(
     clean,
     clone,
-    setCoreVersion,
     install,
+    setCoreVersion,
     build,
     intTest
 );
