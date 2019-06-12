@@ -503,11 +503,11 @@ export abstract class ChromeDebugAdapter implements IDebugAdapter {
     protected runConnection(): Promise<void>[] {
         return [
             this.chrome.Console.enable()
-                .catch(() => { /* Specifically ignore a fail here since it's only for backcompat */ }),
+                .catch(e => { /* Specifically ignore a fail here since it's only for backcompat */ }),
             utils.toVoidP(this.chrome.Debugger.enable()),
             this.chrome.Runtime.enable(),
             this.chrome.Log.enable()
-                .catch(() => { }), // Not supported by all runtimes
+                .catch(e => { }), // Not supported by all runtimes
             this._chromeConnection.run(),
         ];
     }
@@ -671,7 +671,7 @@ export abstract class ChromeDebugAdapter implements IDebugAdapter {
             // After processing smartStep and so on, check whether we are paused on a promise rejection, and should continue past it
             if (this._promiseRejectExceptionFilterEnabled && !this._pauseOnPromiseRejections) {
                 this.chrome.Debugger.resume()
-                    .catch(() => { /* ignore failures */ });
+                    .catch(e => { /* ignore failures */ });
                 return { didPause: false };
             }
 
@@ -1129,7 +1129,7 @@ export abstract class ChromeDebugAdapter implements IDebugAdapter {
             ]
         }
     */
-    public async loadedSources(): Promise<IGetLoadedSourcesResponseBody> {
+    public async loadedSources(args: DebugProtocol.LoadedSourcesArguments): Promise<IGetLoadedSourcesResponseBody> {
         const sources = await Promise.all(Array.from(Scripts._scriptsByUrl.values())
             .map(script => this.scriptToSource(script)));
 
@@ -1313,7 +1313,7 @@ export abstract class ChromeDebugAdapter implements IDebugAdapter {
         telemetry.reportEvent('FullSessionStatistics/SourceMaps/Overrides', { aspNetClientAppFallbackCount: sourceMapUtils.getAspNetFallbackCount() });
         this._clientRequestedSessionEnd = true;
         this.shutdown();
-        this.terminateSession('Got disconnect request');
+        this.terminateSession('Got disconnect request', args);
     }
 
     /* __GDPR__
@@ -1397,7 +1397,7 @@ export abstract class ChromeDebugAdapter implements IDebugAdapter {
         this._expectingResumedEvent = true;
         return this._currentStep = this.chrome.Debugger.resume()
             .then(() => { /* make void */ },
-                () => { /* ignore failures - client can send the request when the target is no longer paused */ });
+                e => { /* ignore failures - client can send the request when the target is no longer paused */ });
     }
 
     /* __GDPR__
@@ -1423,7 +1423,7 @@ export abstract class ChromeDebugAdapter implements IDebugAdapter {
         this._expectingResumedEvent = true;
         return this._currentStep = this.chrome.Debugger.stepOver()
             .then(() => { /* make void */ },
-                () => { /* ignore failures - client can send the request when the target is no longer paused */ });
+                e => { /* ignore failures - client can send the request when the target is no longer paused */ });
     }
 
     /* __GDPR__
@@ -1452,7 +1452,7 @@ export abstract class ChromeDebugAdapter implements IDebugAdapter {
         this._expectingResumedEvent = true;
         return this._currentStep = this.chrome.Debugger.stepInto({ breakOnAsyncCall: true })
             .then(() => { /* make void */ },
-                () => { /* ignore failures - client can send the request when the target is no longer paused */ });
+                e => { /* ignore failures - client can send the request when the target is no longer paused */ });
     }
 
     /* __GDPR__
@@ -1478,7 +1478,7 @@ export abstract class ChromeDebugAdapter implements IDebugAdapter {
         this._expectingResumedEvent = true;
         return this._currentStep = this.chrome.Debugger.stepOut()
             .then(() => { /* make void */ },
-                () => { /* ignore failures - client can send the request when the target is no longer paused */ });
+                e => { /* ignore failures - client can send the request when the target is no longer paused */ });
     }
 
     /* __GDPR__
@@ -1492,7 +1492,7 @@ export abstract class ChromeDebugAdapter implements IDebugAdapter {
     public stepBack(): Promise<void> {
         return (<TimeTravelRuntime>this.chrome).TimeTravel.stepBack()
             .then(() => { /* make void */ },
-                () => { /* ignore failures - client can send the request when the target is no longer paused */ });
+                e => { /* ignore failures - client can send the request when the target is no longer paused */ });
     }
 
     /* __GDPR__
@@ -1506,7 +1506,7 @@ export abstract class ChromeDebugAdapter implements IDebugAdapter {
     public reverseContinue(): Promise<void> {
         return (<TimeTravelRuntime>this.chrome).TimeTravel.reverse()
             .then(() => { /* make void */ },
-                () => { /* ignore failures - client can send the request when the target is no longer paused */ });
+                e => { /* ignore failures - client can send the request when the target is no longer paused */ });
     }
 
     /* __GDPR__
@@ -1565,7 +1565,7 @@ export abstract class ChromeDebugAdapter implements IDebugAdapter {
         await this._pathTransformer.stackTraceResponse(stackTraceResponse);
         await this._sourceMapTransformer.stackTraceResponse(stackTraceResponse);
 
-        await Promise.all(stackTraceResponse.stackFrames.map(async (frame) => {
+        await Promise.all(stackTraceResponse.stackFrames.map(async (frame, i) => {
             // Remove isSourceMapped to convert back to DebugProtocol.StackFrame
             const isSourceMapped = frame.isSourceMapped;
             delete frame.isSourceMapped;
@@ -1641,7 +1641,7 @@ export abstract class ChromeDebugAdapter implements IDebugAdapter {
 
     private async scriptToSource(script: Crdp.Debugger.ScriptParsedEvent): Promise<DebugProtocol.Source> {
         const sourceReference = this.getSourceReferenceForScriptId(script.scriptId);
-        const origin = this.getReadonlyOrigin();
+        const origin = this.getReadonlyOrigin(script.url);
 
         const properlyCasedScriptUrl = utils.canonicalizeUrl(script.url);
         const displayPath = this.realPathToDisplayPath(properlyCasedScriptUrl);
@@ -1682,7 +1682,7 @@ export abstract class ChromeDebugAdapter implements IDebugAdapter {
             // When the script has a url and isn't one we're ignoring, send the name and path fields. PathTransformer will
             // attempt to resolve it to a script in the workspace. Otherwise, send the name and sourceReference fields.
             const sourceReference = this.getSourceReferenceForScriptId(script.scriptId);
-            const origin = this.getReadonlyOrigin();
+            const origin = this.getReadonlyOrigin(script.url);
             const source: DebugProtocol.Source = {
                 name: path.basename(script.url),
                 path: script.url,
@@ -1714,7 +1714,7 @@ export abstract class ChromeDebugAdapter implements IDebugAdapter {
         }
     }
 
-    protected getReadonlyOrigin(): string {
+    protected getReadonlyOrigin(url: string): string {
         // To override
         return undefined;
     }
@@ -2248,7 +2248,7 @@ export abstract class ChromeDebugAdapter implements IDebugAdapter {
         },
         error => Promise.reject(errors.errorFromEvaluate(error.message)))
         // Temporary, Microsoft/vscode#12019
-        .then(() => ChromeUtils.remoteObjectToValue(evalResultObject).value);
+        .then(setVarResponse => ChromeUtils.remoteObjectToValue(evalResultObject).value);
     }
 
     public setPropertyValue(objectId: string, propName: string, value: string): Promise<string> {
