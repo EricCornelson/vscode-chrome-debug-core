@@ -40,6 +40,7 @@ import * as path from 'path';
 import * as nls from 'vscode-nls';
 import { Scripts } from './scripts';
 import { Breakpoints } from './breakpoints';
+import { InternalSourceBreakpoint } from '..';
 let localize = nls.loadMessageBundle();
 
 interface IPropCount {
@@ -405,7 +406,7 @@ export abstract class ChromeDebugAdapter implements IDebugAdapter {
         this._session.shutdown();
     }
 
-    protected async terminateSession(reason: string, restart?: IRestartRequestArgs): Promise<void> {
+    protected async terminateSession(reason: string, disconnectArgs?: DebugProtocol.DisconnectArguments, restart?: IRestartRequestArgs): Promise<void> {
         logger.log(`Terminated: ${reason}`);
 
         if (!this._hasTerminated) {
@@ -2541,6 +2542,14 @@ export abstract class ChromeDebugAdapter implements IDebugAdapter {
 
     private getScriptByUrl(url: string): Crdp.Debugger.ScriptParsedEvent {
         return Scripts.getScriptByUrl(url);
+    }
+
+    protected async addBreakpoints(url: string, breakpoints: InternalSourceBreakpoint[]): Promise<ISetBreakpointResult[]> {
+        return this.breakpoints.addBreakpoints(url, breakpoints);
+    }
+
+    protected validateBreakpointsPath(args: ISetBreakpointsArgs): Promise<void> {
+        return this.breakpoints.validateBreakpointsPath(args);
     }
 
 }
