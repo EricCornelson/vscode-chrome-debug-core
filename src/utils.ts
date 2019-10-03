@@ -636,12 +636,16 @@ export function promiseDefer<T>(): PromiseDefer<T> {
 export type HighResTimer = [number, number];
 
 export function calculateElapsedTime(startProcessingTime: HighResTimer): number {
-    const NanoSecondsPerMillisecond = 1000000;
-    const NanoSecondsPerSecond = 1e9;
+    const elapsedTime = process.hrtime(startProcessingTime);
+    return hrTimeToMilliseconds(elapsedTime);
+}
 
-    const ellapsedTime = process.hrtime(startProcessingTime);
-    const ellapsedMilliseconds = (ellapsedTime[0] * NanoSecondsPerSecond + ellapsedTime[1]) / NanoSecondsPerMillisecond;
-    return ellapsedMilliseconds;
+const NanoSecondsPerMillisecond = 1000000;
+const NanoSecondsPerSecond = 1e9;
+
+export function hrTimeToMilliseconds(hrTime: HighResTimer) {
+    const elapsedMilliseconds = (hrTime[0] * NanoSecondsPerSecond + hrTime[1]) / NanoSecondsPerMillisecond;
+    return elapsedMilliseconds;
 }
 
 // Pattern: The pattern recognizes file paths and captures the file name and the colon at the end.

@@ -2,8 +2,9 @@
  * Copyright (C) Microsoft Corporation. All rights reserved.
  *--------------------------------------------------------*/
 
-import { HighResTimer, calculateElapsedTime } from './utils';
+import { HighResTimer, calculateElapsedTime, hrTimeToMilliseconds } from './utils';
 import { EventEmitter } from 'events';
+import { logger } from '.';
 
 export type TimingsReport = {[stepName: string]: [number] | number};
 
@@ -129,10 +130,15 @@ export class ExecutionTimingsReporter {
     }
 
     private recordPreviousStepAndConfigureNewStep(newStepName: string): void {
+        const allStartMs = hrTimeToMilliseconds(this._allStartTime);
+        const timeTakenInMilliseconds = calculateElapsedTime(this._currentStepStartTime);
+        logger.verbose(`END_STEP: ${this._currentStepName} start: ${hrTimeToMilliseconds(this._currentStepStartTime) - allStartMs} end: ${hrTimeToMilliseconds(this._currentStepStartTime) - allStartMs + timeTakenInMilliseconds} elapsed: ${timeTakenInMilliseconds} [start-up-timings]`);
+
         this.recordTimeTaken(this._currentStepName, this._currentStepStartTime);
         this._stepsList.push(this._currentStepName);
         this._currentStepStartTime = process.hrtime();
         this._currentStepName = newStepName;
+        logger.verbose(`START_STEP: ${newStepName}, start: ${hrTimeToMilliseconds(this._currentStepStartTime) - allStartMs} [start-up-timings]`);
     }
 
     private recordTimeTaken(eventName: string, sinceWhen: HighResTimer): void {
@@ -141,6 +147,9 @@ export class ExecutionTimingsReporter {
     }
 
     private recordTotalTimeUntilMilestone(milestoneName: string): void {
+        const allStartMs = hrTimeToMilliseconds(this._allStartTime);
+        const timeTakenInMilliseconds = calculateElapsedTime(this._currentStepStartTime);
+        logger.verbose(`MILESTONE: ${milestoneName} start: ${0} end: ${timeTakenInMilliseconds - allStartMs} elapsed: ${timeTakenInMilliseconds} [start-up-timings]`);
         this.recordTimeTaken(milestoneName, this._allStartTime);
     }
 
